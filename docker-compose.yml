@@ -1,0 +1,55 @@
+version: "3.3"
+
+services:
+  ################################################
+  ####         Site Setup Container         #####
+  ##############################################
+  wordpress: # <== we aren't going to open :80 here because traefik is going to serve this on entrypoint 'web'
+  ## :80 is already exposed from within the container ##
+    image: wordpress:php7.4
+    restart: always
+    container_name: wp
+    env_file:
+      - .env
+    volumes:
+      - ./wp_data:/var/www/html
+    networks:
+      - traefik
+      - backend
+    labels:
+      #### Labels define the behavior and rules of the traefik proxy for this container ####
+      - "traefik.enable=true" # <== Enable traefik to proxy this container
+      - "traefik.http.routers.traefik-web.rule=Host(`www.yourhost.nl`) || Host(`yourhost.nl`)" # <== Your Domain Name goes here for the http rule
+      - "traefik.http.routers.traefik-web.entrypoints=web" # <== Defining the entrypoint for http, **ref: line 30
+        # - "traefik.http.routers.traefik-web.middlewares=redirect@file" # <== This is a middleware to redirect to https
+      - "traefik.http.routers.traefik-secured.rule=Host(`www.yourhost.nl`) || Host(`yourhost.nl`)" # <== Your Domain Name for the https rule
+      - "traefik.http.routers.traefik-secured.entrypoints=web-secured" # <== Defining entrypoint for https, **ref: line 31
+      - "traefik.http.routers.traefik-secured.tls.certresolver=mytlschallenge" # <== Defining certsresolvers for https
+      - "traefik.http.middlewares.redirectscheme.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirectscheme.redirectscheme.permanent=true"
+      - "traefik.http.routers.traefik-web.middlewares=redirectscheme@docker"
+
+ ################################################
+ ####     DB Container not on traefik      #####
+ ##############################################
+  db:
+    image: mariadb:10.3.37
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - /data/mariadb/db2:/var/lib/mysql
+    networks:
+      - backend
+
+networks:
+  traefik:
+    external: true
+  backend:
+    external: false
+
+volumes:
+  wordpress:
+    external: true
+  db:
+    external: true
